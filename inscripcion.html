@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inscripción · Concurso de Murales · UTEQ</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="barra" id="barra"></header>
+
+<section>
+  <div class="contenedor" style="max-width:860px;">
+    <h2>Inscripción de equipos</h2>
+    <p class="subtitulo">
+      Completa el formulario con los datos de tu equipo y adjunta el boceto preliminar.
+      La inscripción es gratuita y la realiza el <strong>representante del equipo</strong>
+      con su correo institucional.
+    </p>
+
+    <div id="avisos"></div>
+
+    <div id="bloqueo-acceso" class="tarjeta" style="display:none; text-align:center;">
+      <h3 style="margin-top:0;">Ingresa con tu correo institucional</h3>
+      <p style="color:var(--gris);">
+        Para inscribir un equipo necesitas autenticarte con tu cuenta
+        <strong>@uteq.edu.ec</strong>. Así verificamos que eres estudiante de la UTEQ.
+      </p>
+      <button class="btn btn-verde" type="button" id="btn-abrir-acceso">Ingresar</button>
+    </div>
+
+    <form id="form" style="display:none;">
+
+      <!-- ---------- Datos de la propuesta ---------- -->
+      <div class="tarjeta" style="margin-bottom:22px;">
+        <h3 style="margin-top:0;">1 · Datos de la propuesta</h3>
+
+        <div class="fila">
+          <div class="campo">
+            <label for="nombre_equipo">Nombre del equipo *</label>
+            <input type="text" id="nombre_equipo" required maxlength="120">
+          </div>
+          <div class="campo">
+            <label for="nombre_mural">Nombre del mural *</label>
+            <input type="text" id="nombre_mural" required maxlength="160">
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="carreras">Carrera(s) participante(s) *</label>
+          <input type="text" id="carreras" required maxlength="240"
+                 placeholder="Ej.: Ingeniería Civil, Arquitectura">
+        </div>
+
+        <div class="campo">
+          <label>Objetivo(s) de Desarrollo Sostenible seleccionado(s) *</label>
+          <p class="ayuda" style="margin:0 0 10px;">Marca uno o varios. Serán el eje central de tu propuesta.</p>
+          <div class="chks" id="ods"></div>
+        </div>
+
+        <div class="campo">
+          <label for="descripcion">Descripción conceptual *</label>
+          <p class="ayuda" style="margin:0 0 8px;">
+            Entre 150 y 200 palabras. Explica la idea central, su relación con el o los ODS
+            seleccionados y el aporte de la ingeniería y/o la arquitectura.
+          </p>
+          <textarea id="descripcion" required></textarea>
+          <div class="contador" id="contador">0 palabras</div>
+        </div>
+      </div>
+
+      <!-- ---------- Representante ---------- -->
+      <div class="tarjeta" style="margin-bottom:22px;">
+        <h3 style="margin-top:0;">2 · Representante del equipo</h3>
+        <p class="ayuda" style="margin:0 0 16px;">
+          Responsable de la inscripción y de la comunicación con el Comité Organizador.
+        </p>
+        <div class="fila">
+          <div class="campo">
+            <label for="rep_nombre">Nombres y apellidos completos *</label>
+            <input type="text" id="rep_nombre" required maxlength="140">
+          </div>
+          <div class="campo">
+            <label for="rep_email">Correo institucional *</label>
+            <input type="email" id="rep_email" required readonly>
+            <p class="ayuda">Se toma de tu sesión.</p>
+          </div>
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label for="rep_carrera">Carrera *</label>
+            <input type="text" id="rep_carrera" required maxlength="120">
+          </div>
+          <div class="campo">
+            <label for="rep_semestre">Semestre *</label>
+            <input type="text" id="rep_semestre" required maxlength="40">
+          </div>
+          <div class="campo">
+            <label for="rep_telefono">Teléfono de contacto *</label>
+            <input type="tel" id="rep_telefono" required maxlength="30">
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- Integrantes ---------- -->
+      <div class="tarjeta" style="margin-bottom:22px;">
+        <h3 style="margin-top:0;">3 · Integrantes del equipo</h3>
+        <p class="ayuda" style="margin:0 0 16px;">
+          Mínimo 3 y máximo 6 estudiantes, <strong>incluyendo al representante</strong>.
+          Un estudiante solo puede pertenecer a un equipo.
+        </p>
+        <div id="integrantes"></div>
+        <button class="btn btn-linea btn-chico" type="button" id="btn-agregar">+ Agregar integrante</button>
+        <div class="contador" id="contador-int" style="text-align:left; margin-top:10px;"></div>
+      </div>
+
+      <!-- ---------- Boceto ---------- -->
+      <div class="tarjeta" style="margin-bottom:22px;">
+        <h3 style="margin-top:0;">4 · Boceto preliminar</h3>
+        <div class="campo">
+          <label for="boceto">Archivo del boceto *</label>
+          <input type="file" id="boceto" accept="image/png,image/jpeg,image/webp" required>
+          <p class="ayuda">
+            Imagen JPG, PNG o WEBP, máximo 8 MB. Debe permitir comprender con claridad la idea
+            central, la composición general y los elementos principales de la obra.
+          </p>
+        </div>
+        <div id="vista-previa"></div>
+      </div>
+
+      <!-- ---------- Declaraciones ---------- -->
+      <div class="tarjeta" style="margin-bottom:22px;">
+        <h3 style="margin-top:0;">5 · Declaraciones obligatorias</h3>
+        <label class="chk" style="margin-bottom:10px;">
+          <input type="checkbox" id="declara_autoria" required>
+          <span><strong>Declaración de autoría y originalidad.</strong> Declaramos que la propuesta
+          presentada es original, inédita, de autoría del equipo participante, libre de plagio,
+          no constituye copia total o parcial de una obra de terceros y no vulnera derechos de
+          propiedad intelectual.</span>
+        </label>
+        <label class="chk" style="margin-bottom:10px;">
+          <input type="checkbox" id="autoriza_difusion" required>
+          <span><strong>Autorización de publicación y difusión.</strong> Autorizamos a la Universidad
+          Técnica Estatal de Quevedo a publicar, reproducir, fotografiar y difundir el boceto y el
+          mural con fines académicos, culturales, institucionales, informativos y de promoción de la
+          Casa Abierta, conservando el reconocimiento de sus autores.</span>
+        </label>
+        <label class="chk">
+          <input type="checkbox" id="acepta_bases" required>
+          <span><strong>Aceptación de las bases.</strong> Hemos leído, comprendemos y aceptamos las
+          bases del concurso, incluidas las tres etapas, el mecanismo de votación y las
+          disposiciones del Comité Organizador.</span>
+        </label>
+      </div>
+
+      <div class="acciones">
+        <button class="btn btn-verde" type="submit" id="btn-enviar">Enviar inscripción</button>
+        <a class="btn btn-linea" href="index.html">Cancelar</a>
+      </div>
+      <p class="ayuda" style="margin-top:14px;">
+        Al enviar, tu propuesta queda en estado <strong>pendiente de validación</strong>.
+        El Comité Organizador la revisará y, de cumplir los requisitos, será publicada en la galería.
+      </p>
+    </form>
+  </div>
+</section>
+
+<footer id="pie"></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(async function () {
+  const { db, $, $$, esc, palabras, aviso } = App;
+
+  await App.cargarSesion();
+  App.pintarBarra("inscripcion");
+  App.pintarPie();
+
+  const form    = $("#form");
+  const bloqueo = $("#bloqueo-acceso");
+  $("#btn-abrir-acceso").addEventListener("click", App.abrirAcceso);
+
+  if (!App.configurado) {
+    aviso("#avisos", "espera",
+      "<strong>Sitio en modo demostración.</strong> Falta conectar Supabase: edita <code>assets/config.js</code> con la URL y la anon key del proyecto.");
+  }
+
+  /* ---- Estado del concurso ---- */
+  const cfg = await App.leerConfig();
+  if (cfg && cfg.inscripcion_abierta === false) {
+    aviso("#avisos", "espera",
+      "<strong>Las inscripciones están cerradas.</strong> El plazo concluyó el " +
+      esc(App.C.FECHAS.cierre_inscripcion) + ". No se receptarán nuevas propuestas salvo disposición expresa del Comité Organizador.");
+    bloqueo.style.display = "none";
+    return;
+  }
+
+  /* ---- Control de acceso ---- */
+  if (!App.usuario()) {
+    bloqueo.style.display = "block";
+    return;
+  }
+  if (!App.esInstitucional()) {
+    aviso("#avisos", "error",
+      "Ingresaste con <strong>" + esc(App.correo()) + "</strong>, que no pertenece al dominio institucional " +
+      "<strong>@" + esc(App.C.DOMINIO) + "</strong>. Cierra sesión e ingresa con tu correo de la UTEQ.");
+    bloqueo.style.display = "none";
+    return;
+  }
+
+  form.style.display = "block";
+  $("#rep_email").value = App.correo();
+
+  /* ---- ODS ---- */
+  $("#ods").innerHTML = (window.ODS_LISTA || []).map(function (o) {
+    return '<label class="chk"><input type="checkbox" value="' + esc(o.id) + '">' +
+           '<span><strong>' + esc(o.id) + '</strong> · ' + esc(o.nombre) + '</span></label>';
+  }).join("");
+  $$("#ods .chk").forEach(function (l) {
+    l.addEventListener("change", function () { l.classList.toggle("marcado", l.querySelector("input").checked); });
+  });
+
+  /* ---- Contador de palabras ---- */
+  const ta = $("#descripcion"), cont = $("#contador");
+  function actualizarContador() {
+    const n = palabras(ta.value);
+    cont.textContent = n + " palabras (requeridas: 150 a 200)";
+    cont.className = "contador " + (n >= 150 && n <= 200 ? "ok" : (n === 0 ? "" : "mal"));
+  }
+  ta.addEventListener("input", actualizarContador);
+  actualizarContador();
+
+  /* ---- Integrantes ---- */
+  const cajaInt = $("#integrantes");
+  function pintarIntegrante(i) {
+    const d = document.createElement("div");
+    d.className = "integrante";
+    d.innerHTML =
+      '<button type="button" class="quitar">Quitar</button>' +
+      '<h4>Integrante ' + i + '</h4>' +
+      '<div class="fila">' +
+        '<div class="campo"><label>Nombres y apellidos *</label><input type="text" data-c="nombre" required maxlength="140"></div>' +
+        '<div class="campo"><label>Cédula *</label><input type="text" data-c="cedula" required maxlength="20"></div>' +
+      '</div>' +
+      '<div class="fila">' +
+        '<div class="campo"><label>Carrera *</label><input type="text" data-c="carrera" required maxlength="120"></div>' +
+        '<div class="campo"><label>Semestre *</label><input type="text" data-c="semestre" required maxlength="40"></div>' +
+      '</div>';
+    d.querySelector(".quitar").addEventListener("click", function () { d.remove(); renumerar(); });
+    cajaInt.appendChild(d);
+    renumerar();
+  }
+  function renumerar() {
+    const items = $$(".integrante", cajaInt);
+    items.forEach(function (el, k) { el.querySelector("h4").textContent = "Integrante " + (k + 1); });
+    $("#btn-agregar").disabled = items.length >= 6;
+    const n = items.length;
+    const ci = $("#contador-int");
+    ci.textContent = n + " de 6 integrantes registrados (mínimo 3)";
+    ci.className = "contador " + (n >= 3 && n <= 6 ? "ok" : "mal");
+  }
+  $("#btn-agregar").addEventListener("click", function () { pintarIntegrante($$(".integrante", cajaInt).length + 1); });
+  pintarIntegrante(1); pintarIntegrante(2); pintarIntegrante(3);
+
+  /* ---- Vista previa del boceto ---- */
+  $("#boceto").addEventListener("change", function (e) {
+    const f = e.target.files[0];
+    const vp = $("#vista-previa");
+    vp.innerHTML = "";
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) {
+      vp.innerHTML = '<div class="aviso error">El archivo pesa ' + (f.size / 1048576).toFixed(1) + ' MB. El máximo permitido es 8 MB.</div>';
+      e.target.value = "";
+      return;
+    }
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(f);
+    img.style.cssText = "max-height:280px;border-radius:10px;border:1px solid var(--linea);";
+    vp.appendChild(img);
+  });
+
+  /* ---- Envío ---- */
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    App.limpiarAviso("#avisos");
+
+    const ods = $$("#ods input:checked").map(function (i) { return i.value; });
+    const integrantes = $$(".integrante", cajaInt).map(function (el) {
+      const o = {};
+      $$("input[data-c]", el).forEach(function (i) { o[i.dataset.c] = i.value.trim(); });
+      return o;
+    });
+    const nPal = palabras(ta.value);
+    const archivo = $("#boceto").files[0];
+
+    const errores = [];
+    if (!ods.length) errores.push("Debes seleccionar al menos un ODS.");
+    if (nPal < 150 || nPal > 200) errores.push("La descripción conceptual tiene " + nPal + " palabras; debe tener entre 150 y 200.");
+    if (integrantes.length < 3) errores.push("El equipo debe tener al menos 3 integrantes.");
+    if (integrantes.length > 6) errores.push("El equipo no puede superar los 6 integrantes.");
+    if (integrantes.some(function (i) { return !i.nombre || !i.cedula || !i.carrera || !i.semestre; }))
+      errores.push("Completa todos los datos de cada integrante.");
+    if (!archivo) errores.push("Debes adjuntar el boceto preliminar.");
+    if (errores.length) {
+      aviso("#avisos", "error", "<div><strong>Revisa lo siguiente:</strong><ul style='margin:8px 0 0;padding-left:20px;'>" +
+        errores.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul></div>");
+      return;
+    }
+
+    const btn = $("#btn-enviar");
+    btn.disabled = true; btn.textContent = "Subiendo boceto…";
+
+    let ruta = null;
+    try {
+      let ext = (archivo.name.split(".").pop() || "jpg").toLowerCase();
+      if (["jpg", "jpeg", "png", "webp"].indexOf(ext) < 0) ext = "jpg";
+      ruta = App.usuario().id + "/" + Date.now() + "." + ext;
+
+      const sub = await db.storage.from("bocetos").upload(ruta, archivo, { upsert: false });
+      if (sub.error) throw sub.error;
+
+      btn.textContent = "Registrando propuesta…";
+
+      const ins = await db.from("equipos").insert({
+        nombre_equipo: $("#nombre_equipo").value.trim(),
+        nombre_mural:  $("#nombre_mural").value.trim(),
+        carreras:      $("#carreras").value.trim(),
+        ods:           ods,
+        descripcion:   ta.value.replace(/\s+/g, " ").trim(),
+        boceto_url:    ruta,
+        rep_nombre:    $("#rep_nombre").value.trim(),
+        rep_email:     App.correo(),
+        rep_telefono:  $("#rep_telefono").value.trim(),
+        rep_carrera:   $("#rep_carrera").value.trim(),
+        rep_semestre:  $("#rep_semestre").value.trim(),
+        integrantes:   integrantes,
+        declara_autoria:   $("#declara_autoria").checked,
+        autoriza_difusion: $("#autoriza_difusion").checked,
+        acepta_bases:      $("#acepta_bases").checked,
+        estado:        "pendiente",
+        created_by:    App.usuario().id
+      }).select().single();
+
+      if (ins.error) throw ins.error;
+
+      form.style.display = "none";
+      aviso("#avisos", "exito",
+        "<div><strong>Inscripción registrada correctamente.</strong><br>" +
+        "Folio: <strong>#" + esc(ins.data.folio) + "</strong> · Equipo: <strong>" + esc(ins.data.nombre_equipo) + "</strong><br>" +
+        "El Comité Organizador validará la propuesta. Una vez aprobada, aparecerá en la " +
+        "<a href='galeria.html'>galería pública</a> para la votación del " + esc(App.C.FECHAS.votacion) + ".</div>");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+    } catch (err) {
+      // Si el boceto llegó a subirse pero el registro falló, se elimina el archivo
+      // huérfano para que el estudiante pueda reintentar sin dejar basura acumulada.
+      if (ruta) { try { await db.storage.from("bocetos").remove([ruta]); } catch (e) {} }
+
+      btn.disabled = false; btn.textContent = "Enviar inscripción";
+      let m = String(err.message || err);
+      if (m.indexOf("descripcion_longitud") >= 0)
+        m = "La descripción conceptual debe tener entre 150 y 200 palabras.";
+      else if (m.indexOf("integrantes") >= 0)
+        m = "El equipo debe tener entre 3 y 6 integrantes.";
+      else if (m.indexOf("row-level security") >= 0 || m.indexOf("violates row-level") >= 0)
+        m = "Las inscripciones están cerradas o tu correo no pertenece al dominio institucional.";
+      aviso("#avisos", "error", "<div><strong>No se pudo completar la inscripción.</strong><br>" +
+        esc(m) + "</div>");
+    }
+  });
+})();
+</script>
+</body>
+</html>
