@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Panel del Comité · Concurso de Murales · UTEQ</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="barra" id="barra"></header>
+
+<section>
+  <div class="contenedor">
+    <h2>Panel del Comité Organizador</h2>
+    <p class="subtitulo">Validación de propuestas, control de etapas y consolidación de resultados.</p>
+
+    <div id="avisos"></div>
+    <div id="panel" style="display:none;">
+
+      <div class="kpis" id="kpis"></div>
+
+      <h3>Control de etapas</h3>
+      <div class="rejilla rejilla-3" style="margin-bottom:36px;">
+        <label class="interruptor"><input type="checkbox" id="sw-insc">
+          <span><strong>Inscripciones abiertas</strong><br>
+          <span style="font-size:12.5px;color:var(--gris);">Permite registrar nuevas propuestas.</span></span></label>
+        <label class="interruptor"><input type="checkbox" id="sw-vot">
+          <span><strong>Votación habilitada</strong><br>
+          <span style="font-size:12.5px;color:var(--gris);">Habilita el botón de voto en la galería.</span></span></label>
+        <label class="interruptor"><input type="checkbox" id="sw-res">
+          <span><strong>Resultados visibles</strong><br>
+          <span style="font-size:12.5px;color:var(--gris);">Muestra el conteo público de votos.</span></span></label>
+      </div>
+
+      <h3>Resultados consolidados</h3>
+      <div class="tabla-caja" style="margin-bottom:16px;">
+        <table><thead><tr><th>#</th><th>Mural</th><th>Equipo</th><th>Votos</th></tr></thead>
+        <tbody id="tbl-resultados"></tbody></table>
+      </div>
+      <p style="margin-bottom:36px;">
+        <button class="btn btn-linea btn-chico" type="button" id="btn-csv">Descargar resultados (CSV)</button>
+        <button class="btn btn-linea btn-chico" type="button" id="btn-csv-eq">Descargar inscripciones (CSV)</button>
+      </p>
+
+      <h3>Propuestas inscritas</h3>
+      <p class="ayuda" style="margin-bottom:16px;">
+        Verifica el cumplimiento de requisitos antes de aprobar. Solo las propuestas
+        <strong>aprobadas</strong> aparecen en la galería pública.
+      </p>
+      <div class="tabla-caja">
+        <table>
+          <thead><tr><th>Folio</th><th>Propuesta</th><th>Integrantes</th><th>Boceto</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody id="tbl-equipos"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer id="pie"></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(async function () {
+  const { db, $, $$, esc, aviso } = App;
+
+  await App.cargarSesion();
+  App.pintarBarra("");
+  App.pintarPie();
+
+  if (!App.configurado) {
+    aviso("#avisos", "espera", "Falta conectar Supabase en <code>assets/config.js</code>.");
+    return;
+  }
+  if (!App.usuario()) {
+    aviso("#avisos", "info",
+      '<div>Esta sección es exclusiva del Comité Organizador. <button class="btn btn-verde btn-chico" type="button" id="a1" style="margin-left:8px;">Ingresar</button></div>');
+    $("#a1").addEventListener("click", App.abrirAcceso);
+    return;
+  }
+  if (!(await App.esAdmin())) {
+    aviso("#avisos", "error",
+      "La cuenta <strong>" + esc(App.correo()) + "</strong> no está registrada como administradora. " +
+      "Agrégala en la tabla <code>admins</code> de Supabase para habilitar el panel.");
+    return;
+  }
+
+  $("#panel").style.display = "block";
+
+  let cfg = await App.leerConfig();
+  $("#sw-insc").checked = !!cfg.inscripcion_abierta;
+  $("#sw-vot").checked  = !!cfg.votacion_abierta;
+  $("#sw-res").checked  = !!cfg.mostrar_resultados;
+
+  async function guardarConfig() {
+    const cambios = {
+      inscripcion_abierta: $("#sw-insc").checked,
+      votacion_abierta:    $("#sw-vot").checked,
+      mostrar_resultados:  $("#sw-res").checked
+    };
+    const r = await db.from("config").update(cambios).eq("id", 1);
+    if (r.error) aviso("#avisos", "error", esc(r.error.message));
+    else aviso("#avisos", "exito", "Configuración actualizada.");
+  }
+  ["#sw-insc", "#sw-vot", "#sw-res"].forEach(function (s) {
+    $(s).addEventListener("change", guardarConfig);
+  });
+
+  /* ---------- Datos ---------- */
+  let equipos = [], resultados = [];
+
+  async function cargar() {
+    const e = await db.from("equipos").select("*").order("folio", { ascending: true });
+    if (e.error) { aviso("#avisos", "error", "No se pudieron cargar las propuestas: " + esc(e.error.message)); return; }
+    equipos = e.data || [];
+
+    const r = await db.rpc("resultados_admin");
+    if (r.error) { aviso("#avisos", "error", "No se pudieron cargar los resultados: " + esc(r.error.message)); return; }
+    resultados = r.data || [];
+
+    pintarKPIs(); pintarResultados(); pintarEquipos();
+  }
+
+  function pintarKPIs() {
+    const total = equipos.length;
+    const aprobados = equipos.filter(function (x) { return x.estado === "aprobado"; });
+    const pen = equipos.filter(function (x) { return x.estado === "pendiente"; }).length;
+    const votos = resultados.reduce(function (a, b) { return a + Number(b.votos || 0); }, 0);
+    const est = aprobados.reduce(function (a, b) { return a + (b.integrantes || []).length; }, 0);
+    $("#kpis").innerHTML =
+      kpi(total, "Propuestas") + kpi(aprobados.length, "Aprobadas") + kpi(pen, "Pendientes") +
+      kpi(est, "Estudiantes aprobados") + kpi(votos, "Votos emitidos");
+  }
+  function kpi(n, t) { return '<div class="kpi"><div class="n">' + n + '</div><div class="t">' + t + "</div></div>"; }
+
+  function pintarResultados() {
+    const orden = resultados.slice().sort(function (a, b) { return Number(b.votos) - Number(a.votos); });
+    $("#tbl-resultados").innerHTML = orden.length
+      ? orden.map(function (r, i) {
+          const destacado = i < 3 ? ' style="background:var(--lima-sua);font-weight:700;"' : "";
+          return "<tr" + destacado + "><td>" + (i + 1) + "</td><td>" + esc(r.nombre_mural) +
+                 "</td><td>" + esc(r.nombre_equipo) + "</td><td>" + esc(r.votos) + "</td></tr>";
+        }).join("")
+      : '<tr><td colspan="4" style="color:var(--gris);">Sin datos todavía.</td></tr>';
+  }
+
+  function pintarEquipos() {
+    $("#tbl-equipos").innerHTML = equipos.length ? equipos.map(function (e) {
+      const ints = (e.integrantes || []).map(function (i) {
+        return esc(i.nombre) + " <span style='color:var(--gris)'>(" + esc(i.carrera) + " · " + esc(i.semestre) + ")</span>";
+      }).join("<br>");
+      const img = App.urlBoceto(e.boceto_url);
+      return "<tr>" +
+        "<td>#" + esc(e.folio) + "</td>" +
+        "<td><strong>" + esc(e.nombre_mural) + "</strong><br>" +
+          "<span style='color:var(--gris)'>" + esc(e.nombre_equipo) + " · " + esc(e.carreras) + "</span><br>" +
+          "<span style='font-size:12px;color:var(--gris)'>" + esc((e.ods || []).join(", ")) + "</span><br>" +
+          "<span style='font-size:12px;color:var(--gris)'>Rep.: " + esc(e.rep_nombre) + " · " + esc(e.rep_email) +
+          (e.rep_telefono ? " · " + esc(e.rep_telefono) : "") + "</span><br>" +
+          "<details style='margin-top:6px;'><summary style='cursor:pointer;font-size:12.5px;'>Ver descripción</summary>" +
+          "<p style='font-size:13px;color:var(--gris);max-width:420px;'>" + esc(e.descripcion) + "</p></details></td>" +
+        "<td style='font-size:12.5px;'>" + ints + "</td>" +
+        "<td><a href='" + esc(img) + "' target='_blank' rel='noopener'>" +
+          "<img src='" + esc(img) + "' style='width:96px;height:72px;object-fit:cover;border-radius:6px;'></a></td>" +
+        "<td><span class='estado " + esc(e.estado) + "'>" + esc(e.estado) + "</span>" +
+          (e.observaciones ? "<br><span style='font-size:12px;color:var(--gris)'>" + esc(e.observaciones) + "</span>" : "") + "</td>" +
+        "<td style='white-space:nowrap;'>" +
+          "<button class='btn btn-verde btn-chico' data-ap='" + esc(e.id) + "'>Aprobar</button> " +
+          "<button class='btn btn-peligro btn-chico' data-re='" + esc(e.id) + "'>Rechazar</button></td>" +
+      "</tr>";
+    }).join("") : '<tr><td colspan="6" style="color:var(--gris);">Aún no hay inscripciones.</td></tr>';
+
+    $$("[data-ap]").forEach(function (b) { b.addEventListener("click", function () { cambiar(b.dataset.ap, "aprobado"); }); });
+    $$("[data-re]").forEach(function (b) { b.addEventListener("click", function () { cambiar(b.dataset.re, "rechazado"); }); });
+  }
+
+  async function cambiar(id, estado) {
+    // Las observaciones solo se sobrescriben al rechazar: aprobar no debe borrar
+    // el rastro documental de un rechazo anterior.
+    const cambios = { estado: estado };
+    if (estado === "rechazado") {
+      const obs = prompt("Motivo del rechazo (se guarda como observación del Comité):", "");
+      if (obs === null) return;
+      cambios.observaciones = obs;
+    }
+    const r = await db.from("equipos").update(cambios).eq("id", id);
+    if (r.error) { aviso("#avisos", "error", esc(r.error.message)); return; }
+    await cargar();
+    aviso("#avisos", "exito", "Propuesta marcada como <strong>" + esc(estado) + "</strong>.");
+  }
+
+  /* ---------- Exportación ---------- */
+  function descargar(nombre, filas) {
+    const csv = filas.map(function (f) {
+      return f.map(function (c) { return '"' + String(c == null ? "" : c).replace(/"/g, '""') + '"'; }).join(";");
+    }).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" }));
+    a.download = nombre;
+    a.click();
+  }
+
+  $("#btn-csv").addEventListener("click", function () {
+    const orden = resultados.slice().sort(function (a, b) { return Number(b.votos) - Number(a.votos); });
+    descargar("resultados-votacion.csv",
+      [["Posicion", "Mural", "Equipo", "Votos"]].concat(orden.map(function (r, i) {
+        return [i + 1, r.nombre_mural, r.nombre_equipo, r.votos];
+      })));
+  });
+
+  $("#btn-csv-eq").addEventListener("click", function () {
+    descargar("inscripciones.csv",
+      [["Folio", "Equipo", "Mural", "Carreras", "ODS", "Representante", "Correo", "Telefono", "Integrantes", "Estado", "Fecha"]]
+      .concat(equipos.map(function (e) {
+        return [e.folio, e.nombre_equipo, e.nombre_mural, e.carreras, (e.ods || []).join(" / "),
+                e.rep_nombre, e.rep_email, e.rep_telefono,
+                (e.integrantes || []).map(function (i) { return i.nombre + " (" + i.cedula + ")"; }).join(" | "),
+                e.estado, e.created_at];
+      })));
+  });
+
+  await cargar();
+})();
+</script>
+</body>
+</html>
