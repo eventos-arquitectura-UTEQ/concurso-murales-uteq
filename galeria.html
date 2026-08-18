@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galería y votación · Concurso de Murales · UTEQ</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="barra" id="barra"></header>
+
+<section>
+  <div class="contenedor">
+    <h2>Galería de propuestas</h2>
+    <p class="subtitulo">
+      Bocetos validados por el Comité Organizador. La votación en línea corresponde a la
+      etapa de <strong>preselección</strong>: los tres equipos más votados pasan a la
+      ejecución presencial durante la Casa Abierta. Los votos no se acumulan a la
+      puntuación final del jurado.
+    </p>
+
+    <div id="avisos"></div>
+
+    <div class="galeria" id="galeria">
+      <div class="cargando">Cargando propuestas…</div>
+    </div>
+  </div>
+</section>
+
+<footer id="pie"></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(async function () {
+  const { db, $, $$, esc, aviso } = App;
+
+  await App.cargarSesion();
+  App.pintarBarra("galeria");
+  App.pintarPie();
+
+  const cont = $("#galeria");
+
+  if (!App.configurado) {
+    cont.innerHTML = "";
+    aviso("#avisos", "espera",
+      "<strong>Sitio en modo demostración.</strong> Falta conectar Supabase: edita <code>assets/config.js</code> con la URL y la anon key del proyecto.");
+    return;
+  }
+
+  const cfg = await App.leerConfig();
+
+  /* ---------- Avisos de estado ---------- */
+  if (!App.usuario()) {
+    aviso("#avisos", "info",
+      "<div>Para votar debes ingresar con tu correo institucional <strong>@" + esc(App.C.DOMINIO) + "</strong>. " +
+      "Cada persona dispone de <strong>un solo voto</strong>. " +
+      '<button class="btn btn-verde btn-chico" type="button" id="a1" style="margin-left:8px;">Ingresar</button></div>');
+    const b = $("#a1"); if (b) b.addEventListener("click", App.abrirAcceso);
+  } else if (!App.esInstitucional()) {
+    aviso("#avisos", "error",
+      "Tu sesión (<strong>" + esc(App.correo()) + "</strong>) no pertenece al dominio " +
+      "<strong>@" + esc(App.C.DOMINIO) + "</strong>, por lo que no habilita el voto. Cierra sesión e ingresa con tu correo de la UTEQ.");
+  } else if (!cfg.votacion_abierta) {
+    aviso("#avisos", "espera",
+      "<strong>La votación no está habilitada en este momento.</strong> El período previsto es del " +
+      esc(App.C.FECHAS.votacion) + ".");
+  }
+
+  /* ---------- Datos ---------- */
+  const eq = await db.from("equipos_publicos")
+    .select("id,folio,nombre_equipo,nombre_mural,carreras,ods,descripcion,boceto_url")
+    .order("folio", { ascending: true });
+
+  if (eq.error) {
+    cont.innerHTML = '<div class="aviso error">No se pudieron cargar las propuestas: ' + esc(eq.error.message) + "</div>";
+    return;
+  }
+  const equipos = eq.data || [];
+
+  if (!equipos.length) {
+    cont.innerHTML = '<div class="cargando">Todavía no hay propuestas publicadas. Los bocetos validados se publicarán el ' +
+      esc(App.C.FECHAS.publicacion_bocetos) + ".</div>";
+    return;
+  }
+
+  /* Conteos (solo si el Comité los habilitó) */
+  let conteos = {};
+  const res = await db.from("resultados").select("id,votos");
+  if (!res.error && res.data) res.data.forEach(function (r) { conteos[r.id] = r.votos; });
+
+  /* Mi voto */
+  let miVoto = null;
+  if (App.usuario()) {
+    const v = await db.from("votos").select("equipo_id").eq("votante_id", App.usuario().id).maybeSingle();
+    if (!v.error && v.data) miVoto = v.data.equipo_id;
+  }
+
+  /* ---------- Render ---------- */
+  function tarjeta(e) {
+    const etiquetas = (e.ods || []).map(function (o) {
+      return '<span class="ods" style="background:' + App.colorODS(o) + '">' + esc(o) + "</span>";
+    }).join("");
+
+    const n = conteos[e.id];
+    const marcador = (n === null || n === undefined) ? "" : '<span class="conteo">' + n + (n === 1 ? " voto" : " votos") + "</span>";
+
+    let accion;
+    if (miVoto === e.id) {
+      accion = '<span class="votado">&#10003; Tu voto</span>';
+    } else if (miVoto) {
+      accion = '<span style="font-size:13px;color:var(--gris);">Ya emitiste tu voto</span>';
+    } else if (!cfg.votacion_abierta) {
+      accion = '<button class="btn btn-linea btn-chico" type="button" disabled>Votación cerrada</button>';
+    } else if (!App.usuario()) {
+      accion = '<button class="btn btn-verde btn-chico" type="button" data-entrar>Ingresar para votar</button>';
+    } else if (!App.esInstitucional()) {
+      accion = '<button class="btn btn-linea btn-chico" type="button" disabled>Requiere correo @' + esc(App.C.DOMINIO) + "</button>";
+    } else {
+      accion = '<button class="btn btn-verde btn-chico" type="button" data-votar="' + esc(e.id) + '">Votar por esta propuesta</button>';
+    }
+
+    const img = App.urlBoceto(e.boceto_url);
+
+    return '<article class="obra">' +
+      '<div class="lienzo" data-ampliar="' + esc(img) + '">' +
+        '<img loading="lazy" src="' + esc(img) + '" alt="Boceto: ' + esc(e.nombre_mural) + '">' +
+      "</div>" +
+      '<div class="cuerpo">' +
+        '<div class="etiquetas">' + etiquetas + "</div>" +
+        "<h3>" + esc(e.nombre_mural) + "</h3>" +
+        '<p class="equipo"><strong>' + esc(e.nombre_equipo) + "</strong> · " + esc(e.carreras) + "</p>" +
+        '<p class="desc">' + esc(e.descripcion) + "</p>" +
+        '<div class="pie">' + accion + marcador + "</div>" +
+      "</div></article>";
+  }
+
+  function pintar() {
+    cont.innerHTML = equipos.map(tarjeta).join("");
+
+    $$("[data-ampliar]", cont).forEach(function (el) {
+      el.addEventListener("click", function () { App.ampliar(el.dataset.ampliar); });
+    });
+    $$("[data-entrar]", cont).forEach(function (b) {
+      b.addEventListener("click", App.abrirAcceso);
+    });
+    $$("[data-votar]", cont).forEach(function (b) {
+      b.addEventListener("click", function () { votar(b, b.dataset.votar); });
+    });
+  }
+
+  async function votar(btn, equipoId) {
+    const e = equipos.find(function (x) { return x.id === equipoId; });
+    if (!confirm('Vas a votar por "' + e.nombre_mural + '" del equipo ' + e.nombre_equipo +
+                 ".\n\nEl voto es único y definitivo: no podrás cambiarlo.\n\n¿Confirmas?")) return;
+
+    btn.disabled = true; btn.textContent = "Registrando…";
+    const r = await db.from("votos").insert({
+      equipo_id: equipoId,
+      votante_id: App.usuario().id,
+      votante_email: App.correo()
+    });
+
+    if (r.error) {
+      const m = String(r.error.message || "");
+      let texto = m;
+      if (m.indexOf("un_voto_por") >= 0 || m.indexOf("duplicate key") >= 0)
+        texto = "Ya se registró un voto con este correo. Cada persona puede votar una sola vez.";
+      aviso("#avisos", "error", "<strong>No se registró el voto.</strong> " + esc(texto));
+      btn.disabled = false; btn.textContent = "Votar por esta propuesta";
+      return;
+    }
+
+    miVoto = equipoId;
+    const nuevo = await db.from("resultados").select("id,votos");
+    if (!nuevo.error && nuevo.data) { conteos = {}; nuevo.data.forEach(function (x) { conteos[x.id] = x.votos; }); }
+    pintar();
+    aviso("#avisos", "exito",
+      "<strong>Voto registrado.</strong> Gracias por participar en la preselección del Concurso de Murales.");
+  }
+
+  pintar();
+})();
+</script>
+</body>
+</html>
