@@ -266,9 +266,14 @@ tbody tr:hover{ background:var(--fondo); }
 .interruptor input{ width:20px; height:20px; accent-color:var(--verde); }
 
 /* ---------- Pie ---------- */
-footer{ background:var(--verde-osc); color:rgba(255,255,255,.85); padding:40px 0; font-size:14px; margin-top:40px; }
+body{ padding-bottom:84px; }
+footer{
+  background:var(--verde-osc); color:rgba(255,255,255,.85); padding:16px 0; font-size:13.5px;
+  position:fixed; left:0; right:0; bottom:0; z-index:150;
+  box-shadow:0 -3px 14px rgba(0,45,15,.18);
+}
 footer a{ color:var(--lima); }
-footer .contenedor{ display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+footer .contenedor{ display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap; }
 
 .cargando{ text-align:center; padding:56px 0; color:var(--gris); }
 
@@ -276,8 +281,12 @@ footer .contenedor{ display:flex; justify-content:space-between; gap:20px; flex-
   .barra .contenedor{ min-height:auto; padding-top:10px; padding-bottom:10px; }
   .menu{ width:100%; margin-left:0; }
   section{ padding:40px 0; }
+  footer{ padding:12px 0; font-size:12px; }
+  footer .contenedor{ flex-direction:column; align-items:flex-start; gap:6px; }
+  body{ padding-bottom:150px; }
 }
 
 @media print{
+  body{ padding-bottom:0; }
   .barra, .menu, footer, .acciones{ display:none; }
 }
