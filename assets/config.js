@@ -11,8 +11,8 @@
 
 window.CONFIG = {
 
-  SUPABASE_URL:      "https://TU-PROYECTO.supabase.co",
-  SUPABASE_ANON_KEY: "PEGA_AQUI_TU_ANON_KEY",
+    SUPABASE_URL:      "https://fojqmmddcggrakglvhzn.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvanFtbWRkY2dncmFrZ2x2aHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwOTQ0MTYsImV4cCI6MjEwMjY3MDQxNn0.Y9QmDx7Rw-G_nyxj39O5l7bW2ufXU3euGa6WF70aoDM",
 
   // Dominio institucional habilitado para inscribirse y votar
   DOMINIO: "uteq.edu.ec",
