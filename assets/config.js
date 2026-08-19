@@ -34,7 +34,7 @@ window.CONFIG = {
   },
 
   // Enlace al PDF de las bases (súbelo al repositorio o a Drive)
-  URL_BASES: "bases-concurso-murales.pdf",
+    URL_BASES: "bases.pdf",
 
   // Correo de contacto del Comité Organizador
   CONTACTO: "casaabierta.fci@uteq.edu.ec"
