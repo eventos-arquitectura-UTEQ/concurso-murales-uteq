@@ -290,28 +290,28 @@
   }
 
   /* ---------- Voto ---------- */
+  // El voto se aplica de inmediato: es reversible mientras la votación siga
+  // abierta, así que pedir confirmación solo añadiría fricción.
   async function votar(btn, equipoId, esCambio) {
     const e = equipos.find(function (x) { return x.id === equipoId; });
-    const previo = miVoto ? equipos.find(function (x) { return x.id === miVoto; }) : null;
-
-    const texto = esCambio && previo
-      ? 'Vas a cambiar tu voto de "' + previo.nombre_mural + '" a "' + e.nombre_mural + '".\n\n¿Confirmas?'
-      : 'Vas a votar por "' + e.nombre_mural + '" del equipo ' + e.nombre_equipo +
-        ".\n\nPodrás cambiarlo mientras la votación siga abierta.\n\n¿Confirmas?";
-    if (!confirm(texto)) return;
-
     btn.disabled = true;
     const r = await db.rpc("emitir_voto", { p_equipo: equipoId });
     if (r.error) { alert("No se registró el voto: " + r.error.message); }
     await refrescar();
+    if (!r.error) {
+      aviso("#avisos", "exito", (esCambio ? "<strong>Voto cambiado.</strong> " : "<strong>Voto registrado.</strong> ") +
+        "Tu voto es para <strong>" + esc(e.nombre_mural) + "</strong>. Puedes cambiarlo mientras la votación siga abierta.");
+    }
   }
 
   async function anular(btn) {
-    if (!confirm("Vas a anular tu voto.\n\nPodrás volver a votar mientras la votación siga abierta.\n\n¿Confirmas?")) return;
     btn.disabled = true;
     const r = await db.rpc("anular_voto");
     if (r.error) { alert("No se pudo anular el voto: " + r.error.message); }
     await refrescar();
+    if (!r.error) {
+      aviso("#avisos", "info", "<strong>Voto anulado.</strong> Ya no tienes ningún voto registrado.");
+    }
   }
 
   pintar();
