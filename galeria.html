@@ -16,8 +16,8 @@
     <p class="subtitulo">
       Bocetos validados por el Comité Organizador. La votación en línea corresponde a la
       etapa de <strong>preselección</strong>: los tres equipos más votados pasan a la
-      ejecución presencial durante la Casa Abierta. Los votos no se acumulan a la
-      puntuación final del jurado.
+      ejecución presencial durante la Casa Abierta. Toca una propuesta para ver la ficha
+      completa y comentarla.
     </p>
 
     <div id="avisos"></div>
@@ -27,6 +27,13 @@
     </div>
   </div>
 </section>
+
+<!-- ---------- Visor de la propuesta ---------- -->
+<div class="ficha" id="ficha" role="dialog" aria-modal="true" aria-hidden="true">
+  <button class="ficha-cerrar" type="button" id="ficha-cerrar" aria-label="Cerrar">&times;</button>
+  <div class="ficha-imagen"><img id="ficha-img" alt=""></div>
+  <aside class="ficha-panel" id="ficha-panel"></aside>
+</div>
 
 <footer id="pie"></footer>
 
@@ -50,12 +57,13 @@
     return;
   }
 
-  const cfg = await App.leerConfig();
+  const cfg     = await App.leerConfig();
+  const esAdmin = App.usuario() ? await App.esAdmin() : false;
 
   /* ---------- Avisos de estado ---------- */
   if (!App.usuario()) {
     aviso("#avisos", "info",
-      "<div>Para votar debes ingresar con tu correo institucional <strong>@" + esc(App.C.DOMINIO) + "</strong>. " +
+      "<div>Para votar o comentar debes ingresar con tu correo institucional <strong>@" + esc(App.C.DOMINIO) + "</strong>. " +
       "Cada persona dispone de <strong>un solo voto</strong>, y puede cambiarlo mientras la votación siga abierta. " +
       '<button class="btn btn-verde btn-chico" type="button" id="a1" style="margin-left:8px;">Ingresar</button></div>');
     const b = $("#a1"); if (b) b.addEventListener("click", App.abrirAcceso);
@@ -86,107 +94,202 @@
     return;
   }
 
-  /* Conteos (solo si el Comité los habilitó) */
-  let conteos = {};
+  let conteos = {}, miVoto = null;
+
   async function releerConteos() {
     const res = await db.from("resultados").select("id,votos");
     conteos = {};
     if (!res.error && res.data) res.data.forEach(function (r) { conteos[r.id] = r.votos; });
   }
-  await releerConteos();
-
-  /* Mi voto */
-  let miVoto = null;
   async function releerMiVoto() {
     miVoto = null;
     if (!App.usuario()) return;
     const v = await db.from("votos").select("equipo_id").eq("votante_id", App.usuario().id).maybeSingle();
     if (!v.error && v.data) miVoto = v.data.equipo_id;
   }
+  await releerConteos();
   await releerMiVoto();
 
-  /* ---------- Render ---------- */
-  function tarjeta(e) {
-    const etiquetas = (e.ods || []).map(function (o) {
-      return '<span class="ods" style="background:' + App.colorODS(o) + '">' + esc(o) + "</span>";
-    }).join("");
-
-    const n = conteos[e.id];
-    const marcador = (n === null || n === undefined) ? "" : '<span class="conteo">' + n + (n === 1 ? " voto" : " votos") + "</span>";
-
-    let accion;
+  /* ---------- Botonera de voto (reutilizada en tarjeta y ficha) ---------- */
+  function botonVoto(e, chico) {
+    const cls = chico ? " btn-chico" : "";
     if (miVoto === e.id) {
-      accion = '<span class="votado">&#10003; Tu voto</span>' +
-        (cfg.votacion_abierta
-          ? ' <button class="btn btn-linea btn-chico" type="button" data-anular>Anular</button>'
-          : "");
-    } else if (miVoto) {
-      accion = cfg.votacion_abierta
-        ? '<button class="btn btn-linea btn-chico" type="button" data-cambiar="' + esc(e.id) + '">Cambiar mi voto a esta</button>'
-        : '<span style="font-size:13px;color:var(--gris);">Votaste por otra propuesta</span>';
-    } else if (!cfg.votacion_abierta) {
-      accion = '<button class="btn btn-linea btn-chico" type="button" disabled>Votación cerrada</button>';
-    } else if (!App.usuario()) {
-      accion = '<button class="btn btn-verde btn-chico" type="button" data-entrar>Ingresar para votar</button>';
-    } else if (!App.esInstitucional()) {
-      accion = '<button class="btn btn-linea btn-chico" type="button" disabled>Requiere correo @' + esc(App.C.DOMINIO) + "</button>";
-    } else {
-      accion = '<button class="btn btn-verde btn-chico" type="button" data-votar="' + esc(e.id) + '">Votar por esta propuesta</button>';
+      return '<span class="votado-claro">&#10003; Tu voto</span>' +
+        (cfg.votacion_abierta ? ' <button class="btn btn-linea' + cls + '" type="button" data-anular>Anular</button>' : "");
     }
+    if (miVoto) {
+      return cfg.votacion_abierta
+        ? '<button class="btn btn-linea' + cls + '" type="button" data-cambiar="' + esc(e.id) + '">Cambiar mi voto</button>'
+        : '<span class="nota-clara">Votaste por otra</span>';
+    }
+    if (!cfg.votacion_abierta) return '<span class="nota-clara">Votación cerrada</span>';
+    if (!App.usuario())        return '<button class="btn btn-verde' + cls + '" type="button" data-entrar>Ingresar para votar</button>';
+    if (!App.esInstitucional())return '<span class="nota-clara">Requiere correo institucional</span>';
+    return '<button class="btn btn-verde' + cls + '" type="button" data-votar="' + esc(e.id) + '">Votar</button>';
+  }
 
-    const img = App.urlBoceto(e.boceto_url);
+  function marcador(e) {
+    const n = conteos[e.id];
+    if (n === null || n === undefined) return "";
+    return '<span class="conteo-claro">' + n + (n === 1 ? " voto" : " votos") + "</span>";
+  }
 
-    return '<article class="obra">' +
-      '<div class="lienzo" data-ampliar="' + esc(img) + '">' +
-        '<img loading="lazy" src="' + esc(img) + '" alt="Boceto: ' + esc(e.nombre_mural) + '">' +
-      "</div>" +
-      '<div class="cuerpo">' +
-        '<div class="etiquetas">' + etiquetas + "</div>" +
-        "<h3>" + esc(e.nombre_mural) + "</h3>" +
-        '<p class="equipo"><strong>' + esc(e.nombre_equipo) + "</strong> · " + esc(e.carreras) + "</p>" +
-        '<p class="desc recortada">' + esc(e.descripcion) + "</p>" +
-        '<button class="ver-mas" type="button" data-mas>Leer la descripción</button>' +
-        '<div class="pie">' + accion + marcador + "</div>" +
-      "</div></article>";
+  /* ---------- Tarjetas: solo la imagen ---------- */
+  function tarjeta(e) {
+    return '<article class="obra" data-abrir="' + esc(e.id) + '">' +
+      '<img loading="lazy" src="' + esc(App.urlBoceto(e.boceto_url)) + '" alt="Boceto: ' + esc(e.nombre_mural) + '">' +
+      '<div class="cinta-sup"><h3>' + esc(e.nombre_mural) + "</h3>" +
+        '<span>' + esc(e.nombre_equipo) + "</span></div>" +
+      '<div class="cinta-inf">' + botonVoto(e, true) + marcador(e) + "</div>" +
+    "</article>";
   }
 
   function pintar() {
     cont.innerHTML = equipos.map(tarjeta).join("");
-
-    $$("[data-ampliar]", cont).forEach(function (el) {
-      el.addEventListener("click", function () { App.ampliar(el.dataset.ampliar); });
-    });
-    $$("[data-entrar]", cont).forEach(function (b) {
-      b.addEventListener("click", App.abrirAcceso);
-    });
-
-    /* Desplegar / contraer la descripción */
-    $$("[data-mas]", cont).forEach(function (b) {
-      b.addEventListener("click", function () {
-        const p = b.previousElementSibling;
-        const abierta = p.classList.toggle("abierta");
-        p.classList.toggle("recortada", !abierta);
-        b.textContent = abierta ? "Ocultar la descripción" : "Leer la descripción";
+    conectarAcciones(cont);
+    $$("[data-abrir]", cont).forEach(function (el) {
+      el.addEventListener("click", function (ev) {
+        if (ev.target.closest("button")) return;   // los botones no abren la ficha
+        abrirFicha(el.dataset.abrir);
       });
     });
+  }
 
-    $$("[data-votar]", cont).forEach(function (b) {
-      b.addEventListener("click", function () { votar(b, b.dataset.votar, false); });
-    });
-    $$("[data-cambiar]", cont).forEach(function (b) {
-      b.addEventListener("click", function () { votar(b, b.dataset.cambiar, true); });
-    });
-    $$("[data-anular]", cont).forEach(function (b) {
-      b.addEventListener("click", function () { anular(b); });
-    });
+  function conectarAcciones(raiz) {
+    $$("[data-entrar]", raiz).forEach(function (b) { b.addEventListener("click", App.abrirAcceso); });
+    $$("[data-votar]", raiz).forEach(function (b) { b.addEventListener("click", function () { votar(b, b.dataset.votar, false); }); });
+    $$("[data-cambiar]", raiz).forEach(function (b) { b.addEventListener("click", function () { votar(b, b.dataset.cambiar, true); }); });
+    $$("[data-anular]", raiz).forEach(function (b) { b.addEventListener("click", function () { anular(b); }); });
   }
 
   async function refrescar() {
     await releerConteos();
     await releerMiVoto();
     pintar();
+    if (fichaActual) await pintarFicha(fichaActual);
   }
 
+  /* ---------- Ficha ---------- */
+  const ficha  = $("#ficha");
+  const panel  = $("#ficha-panel");
+  const imgVis = $("#ficha-img");
+  let fichaActual = null;
+
+  function fecha(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-EC", { day: "numeric", month: "long" }) + " · " +
+           d.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function pintarFicha(id) {
+    const e = equipos.find(function (x) { return x.id === id; });
+    if (!e) return;
+
+    const etiquetas = (e.ods || []).map(function (o) {
+      return '<span class="ods" style="background:' + App.colorODS(o) + '">' + esc(o) + "</span>";
+    }).join("");
+
+    const com = await db.from("comentarios")
+      .select("id,autor_nombre,autor_email,texto,created_at,autor_id")
+      .eq("equipo_id", id).order("created_at", { ascending: false });
+    const lista = com.data || [];
+
+    const puedeComentar = App.usuario() && App.esInstitucional();
+    const uid = App.usuario() ? App.usuario().id : null;
+
+    panel.innerHTML =
+      '<div class="etiquetas">' + etiquetas + "</div>" +
+      "<h3>" + esc(e.nombre_mural) + "</h3>" +
+      '<p class="ficha-equipo"><strong>' + esc(e.nombre_equipo) + "</strong><br>" + esc(e.carreras) + "</p>" +
+      '<div class="ficha-voto">' + botonVoto(e, false) +
+        (marcador(e) ? '<span class="ficha-conteo">' + (conteos[e.id]) + (conteos[e.id] === 1 ? " voto" : " votos") + "</span>" : "") +
+      "</div>" +
+      '<p class="ficha-desc">' + esc(e.descripcion) + "</p>" +
+      '<h4 class="ficha-h4">Comentarios <span>(' + lista.length + ")</span></h4>" +
+      (puedeComentar
+        ? '<form class="ficha-form" id="form-com">' +
+            '<textarea id="txt-com" maxlength="600" rows="3" placeholder="Escribe un comentario…" required></textarea>' +
+            '<button class="btn btn-verde btn-chico" type="submit">Publicar</button>' +
+          "</form>"
+        : (App.usuario()
+            ? '<p class="nota">Solo la comunidad UTEQ puede comentar.</p>'
+            : '<p class="nota">Ingresa con tu correo institucional para comentar. <button class="btn btn-verde btn-chico" type="button" data-entrar>Ingresar</button></p>')) +
+      '<div class="ficha-coms">' +
+        (lista.length
+          ? lista.map(function (c) {
+              const propio = uid && c.autor_id === uid;
+              return '<div class="com">' +
+                '<div class="com-cab"><strong>' + esc(c.autor_nombre || c.autor_email) + "</strong>" +
+                  '<span>' + esc(fecha(c.created_at)) + "</span>" +
+                  ((propio || esAdmin) ? ' <button class="com-borrar" type="button" data-borrar="' + esc(c.id) + '">Eliminar</button>' : "") +
+                "</div>" +
+                '<p>' + esc(c.texto) + "</p></div>";
+            }).join("")
+          : '<p class="nota">Aún no hay comentarios. Sé el primero.</p>') +
+      "</div>";
+
+    conectarAcciones(panel);
+
+    const f = $("#form-com");
+    if (f) f.addEventListener("submit", function (ev) { ev.preventDefault(); comentar(id); });
+
+    $$("[data-borrar]", panel).forEach(function (b) {
+      b.addEventListener("click", function () { borrarComentario(b.dataset.borrar, id); });
+    });
+  }
+
+  async function abrirFicha(id) {
+    const e = equipos.find(function (x) { return x.id === id; });
+    if (!e) return;
+    fichaActual = id;
+    imgVis.src = App.urlBoceto(e.boceto_url);
+    imgVis.alt = "Boceto: " + e.nombre_mural;
+    ficha.classList.add("abierta");
+    ficha.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    await pintarFicha(id);
+  }
+
+  function cerrarFicha() {
+    fichaActual = null;
+    ficha.classList.remove("abierta");
+    ficha.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  }
+
+  $("#ficha-cerrar").addEventListener("click", cerrarFicha);
+  ficha.addEventListener("click", function (ev) { if (ev.target === ficha) cerrarFicha(); });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && fichaActual) cerrarFicha(); });
+
+  /* ---------- Comentarios ---------- */
+  async function comentar(equipoId) {
+    const ta = $("#txt-com");
+    const texto = ta.value.trim();
+    if (texto.length < 2) return;
+
+    const u = App.usuario();
+    const nombre = (u.user_metadata && (u.user_metadata.full_name || u.user_metadata.name)) || App.correo();
+
+    ta.disabled = true;
+    const r = await db.from("comentarios").insert({
+      equipo_id: equipoId, autor_id: u.id, autor_email: App.correo(),
+      autor_nombre: nombre, texto: texto
+    });
+    ta.disabled = false;
+
+    if (r.error) { alert("No se pudo publicar el comentario: " + r.error.message); return; }
+    ta.value = "";
+    await pintarFicha(equipoId);
+  }
+
+  async function borrarComentario(id, equipoId) {
+    if (!confirm("¿Eliminar este comentario?")) return;
+    const r = await db.from("comentarios").delete().eq("id", id);
+    if (r.error) { alert("No se pudo eliminar: " + r.error.message); return; }
+    await pintarFicha(equipoId);
+  }
+
+  /* ---------- Voto ---------- */
   async function votar(btn, equipoId, esCambio) {
     const e = equipos.find(function (x) { return x.id === equipoId; });
     const previo = miVoto ? equipos.find(function (x) { return x.id === miVoto; }) : null;
@@ -197,35 +300,18 @@
         ".\n\nPodrás cambiarlo mientras la votación siga abierta.\n\n¿Confirmas?";
     if (!confirm(texto)) return;
 
-    btn.disabled = true; btn.textContent = "Registrando…";
+    btn.disabled = true;
     const r = await db.rpc("emitir_voto", { p_equipo: equipoId });
-
-    if (r.error) {
-      aviso("#avisos", "error", "<strong>No se registró el voto.</strong> " + esc(r.error.message));
-      await refrescar();
-      return;
-    }
-
+    if (r.error) { alert("No se registró el voto: " + r.error.message); }
     await refrescar();
-    aviso("#avisos", "exito", esCambio
-      ? "<strong>Voto actualizado.</strong> Tu voto quedó registrado para <strong>" + esc(e.nombre_mural) + "</strong>."
-      : "<strong>Voto registrado.</strong> Gracias por participar en la preselección del Concurso de Murales.");
   }
 
   async function anular(btn) {
-    if (!confirm("Vas a anular tu voto.\n\nQuedarás sin voto registrado y podrás volver a votar mientras la votación siga abierta.\n\n¿Confirmas?")) return;
-
-    btn.disabled = true; btn.textContent = "Anulando…";
+    if (!confirm("Vas a anular tu voto.\n\nPodrás volver a votar mientras la votación siga abierta.\n\n¿Confirmas?")) return;
+    btn.disabled = true;
     const r = await db.rpc("anular_voto");
-
-    if (r.error) {
-      aviso("#avisos", "error", "<strong>No se pudo anular el voto.</strong> " + esc(r.error.message));
-      await refrescar();
-      return;
-    }
-
+    if (r.error) { alert("No se pudo anular el voto: " + r.error.message); }
     await refrescar();
-    aviso("#avisos", "info", "<strong>Voto anulado.</strong> Ya no tienes ningún voto registrado.");
   }
 
   pintar();
