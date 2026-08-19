@@ -199,7 +199,18 @@ h2{ font-size:clamp(1.5rem,3.2vw,2.05rem); margin:0 0 8px; letter-spacing:-.3px;
 .obra h3{ margin:0; font-size:1.12rem; line-height:1.3; }
 .obra .equipo{ font-size:13px; color:var(--gris); margin:0; }
 .obra .desc{ font-size:14px; color:var(--gris); margin:0; }
-.obra .pie{ margin-top:auto; padding-top:12px; border-top:1px solid var(--linea); display:flex; align-items:center; gap:10px; }
+/* Descripción contraída: se muestran 4 líneas y el resto se despliega a voluntad */
+.obra .desc.recortada{
+  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.obra .ver-mas{
+  align-self:flex-start; background:none; border:none; padding:0;
+  color:var(--verde); font-family:inherit; font-size:13px; font-weight:700;
+  cursor:pointer; text-decoration:underline;
+}
+.obra .ver-mas:hover{ color:var(--verde-cla); }
+.obra .pie{ margin-top:auto; padding-top:12px; border-top:1px solid var(--linea); display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
 .etiquetas{ display:flex; gap:6px; flex-wrap:wrap; }
 .ods{
