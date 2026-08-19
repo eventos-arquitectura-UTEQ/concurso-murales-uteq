@@ -56,7 +56,7 @@
   if (!App.usuario()) {
     aviso("#avisos", "info",
       "<div>Para votar debes ingresar con tu correo institucional <strong>@" + esc(App.C.DOMINIO) + "</strong>. " +
-      "Cada persona dispone de <strong>un solo voto</strong>. " +
+      "Cada persona dispone de <strong>un solo voto</strong>, y puede cambiarlo mientras la votación siga abierta. " +
       '<button class="btn btn-verde btn-chico" type="button" id="a1" style="margin-left:8px;">Ingresar</button></div>');
     const b = $("#a1"); if (b) b.addEventListener("click", App.abrirAcceso);
   } else if (!App.esInstitucional()) {
@@ -88,15 +88,22 @@
 
   /* Conteos (solo si el Comité los habilitó) */
   let conteos = {};
-  const res = await db.from("resultados").select("id,votos");
-  if (!res.error && res.data) res.data.forEach(function (r) { conteos[r.id] = r.votos; });
+  async function releerConteos() {
+    const res = await db.from("resultados").select("id,votos");
+    conteos = {};
+    if (!res.error && res.data) res.data.forEach(function (r) { conteos[r.id] = r.votos; });
+  }
+  await releerConteos();
 
   /* Mi voto */
   let miVoto = null;
-  if (App.usuario()) {
+  async function releerMiVoto() {
+    miVoto = null;
+    if (!App.usuario()) return;
     const v = await db.from("votos").select("equipo_id").eq("votante_id", App.usuario().id).maybeSingle();
     if (!v.error && v.data) miVoto = v.data.equipo_id;
   }
+  await releerMiVoto();
 
   /* ---------- Render ---------- */
   function tarjeta(e) {
@@ -109,9 +116,14 @@
 
     let accion;
     if (miVoto === e.id) {
-      accion = '<span class="votado">&#10003; Tu voto</span>';
+      accion = '<span class="votado">&#10003; Tu voto</span>' +
+        (cfg.votacion_abierta
+          ? ' <button class="btn btn-linea btn-chico" type="button" data-anular>Anular</button>'
+          : "");
     } else if (miVoto) {
-      accion = '<span style="font-size:13px;color:var(--gris);">Ya emitiste tu voto</span>';
+      accion = cfg.votacion_abierta
+        ? '<button class="btn btn-linea btn-chico" type="button" data-cambiar="' + esc(e.id) + '">Cambiar mi voto a esta</button>'
+        : '<span style="font-size:13px;color:var(--gris);">Votaste por otra propuesta</span>';
     } else if (!cfg.votacion_abierta) {
       accion = '<button class="btn btn-linea btn-chico" type="button" disabled>Votación cerrada</button>';
     } else if (!App.usuario()) {
@@ -132,7 +144,8 @@
         '<div class="etiquetas">' + etiquetas + "</div>" +
         "<h3>" + esc(e.nombre_mural) + "</h3>" +
         '<p class="equipo"><strong>' + esc(e.nombre_equipo) + "</strong> · " + esc(e.carreras) + "</p>" +
-        '<p class="desc">' + esc(e.descripcion) + "</p>" +
+        '<p class="desc recortada">' + esc(e.descripcion) + "</p>" +
+        '<button class="ver-mas" type="button" data-mas>Leer la descripción</button>' +
         '<div class="pie">' + accion + marcador + "</div>" +
       "</div></article>";
   }
@@ -146,39 +159,73 @@
     $$("[data-entrar]", cont).forEach(function (b) {
       b.addEventListener("click", App.abrirAcceso);
     });
+
+    /* Desplegar / contraer la descripción */
+    $$("[data-mas]", cont).forEach(function (b) {
+      b.addEventListener("click", function () {
+        const p = b.previousElementSibling;
+        const abierta = p.classList.toggle("abierta");
+        p.classList.toggle("recortada", !abierta);
+        b.textContent = abierta ? "Ocultar la descripción" : "Leer la descripción";
+      });
+    });
+
     $$("[data-votar]", cont).forEach(function (b) {
-      b.addEventListener("click", function () { votar(b, b.dataset.votar); });
+      b.addEventListener("click", function () { votar(b, b.dataset.votar, false); });
+    });
+    $$("[data-cambiar]", cont).forEach(function (b) {
+      b.addEventListener("click", function () { votar(b, b.dataset.cambiar, true); });
+    });
+    $$("[data-anular]", cont).forEach(function (b) {
+      b.addEventListener("click", function () { anular(b); });
     });
   }
 
-  async function votar(btn, equipoId) {
+  async function refrescar() {
+    await releerConteos();
+    await releerMiVoto();
+    pintar();
+  }
+
+  async function votar(btn, equipoId, esCambio) {
     const e = equipos.find(function (x) { return x.id === equipoId; });
-    if (!confirm('Vas a votar por "' + e.nombre_mural + '" del equipo ' + e.nombre_equipo +
-                 ".\n\nEl voto es único y definitivo: no podrás cambiarlo.\n\n¿Confirmas?")) return;
+    const previo = miVoto ? equipos.find(function (x) { return x.id === miVoto; }) : null;
+
+    const texto = esCambio && previo
+      ? 'Vas a cambiar tu voto de "' + previo.nombre_mural + '" a "' + e.nombre_mural + '".\n\n¿Confirmas?'
+      : 'Vas a votar por "' + e.nombre_mural + '" del equipo ' + e.nombre_equipo +
+        ".\n\nPodrás cambiarlo mientras la votación siga abierta.\n\n¿Confirmas?";
+    if (!confirm(texto)) return;
 
     btn.disabled = true; btn.textContent = "Registrando…";
-    const r = await db.from("votos").insert({
-      equipo_id: equipoId,
-      votante_id: App.usuario().id,
-      votante_email: App.correo()
-    });
+    const r = await db.rpc("emitir_voto", { p_equipo: equipoId });
 
     if (r.error) {
-      const m = String(r.error.message || "");
-      let texto = m;
-      if (m.indexOf("un_voto_por") >= 0 || m.indexOf("duplicate key") >= 0)
-        texto = "Ya se registró un voto con este correo. Cada persona puede votar una sola vez.";
-      aviso("#avisos", "error", "<strong>No se registró el voto.</strong> " + esc(texto));
-      btn.disabled = false; btn.textContent = "Votar por esta propuesta";
+      aviso("#avisos", "error", "<strong>No se registró el voto.</strong> " + esc(r.error.message));
+      await refrescar();
       return;
     }
 
-    miVoto = equipoId;
-    const nuevo = await db.from("resultados").select("id,votos");
-    if (!nuevo.error && nuevo.data) { conteos = {}; nuevo.data.forEach(function (x) { conteos[x.id] = x.votos; }); }
-    pintar();
-    aviso("#avisos", "exito",
-      "<strong>Voto registrado.</strong> Gracias por participar en la preselección del Concurso de Murales.");
+    await refrescar();
+    aviso("#avisos", "exito", esCambio
+      ? "<strong>Voto actualizado.</strong> Tu voto quedó registrado para <strong>" + esc(e.nombre_mural) + "</strong>."
+      : "<strong>Voto registrado.</strong> Gracias por participar en la preselección del Concurso de Murales.");
+  }
+
+  async function anular(btn) {
+    if (!confirm("Vas a anular tu voto.\n\nQuedarás sin voto registrado y podrás volver a votar mientras la votación siga abierta.\n\n¿Confirmas?")) return;
+
+    btn.disabled = true; btn.textContent = "Anulando…";
+    const r = await db.rpc("anular_voto");
+
+    if (r.error) {
+      aviso("#avisos", "error", "<strong>No se pudo anular el voto.</strong> " + esc(r.error.message));
+      await refrescar();
+      return;
+    }
+
+    await refrescar();
+    aviso("#avisos", "info", "<strong>Voto anulado.</strong> Ya no tienes ningún voto registrado.");
   }
 
   pintar();
