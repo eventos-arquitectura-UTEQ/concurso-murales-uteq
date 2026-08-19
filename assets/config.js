@@ -18,7 +18,7 @@ window.CONFIG = {
   DOMINIO: "uteq.edu.ec",
 
   // Método de ingreso: "google" (recomendado, instantáneo)  |  "magic"  |  "ambos"
-  METODO_LOGIN: "ambos",
+    METODO_LOGIN: "google",
 
   // Textos del encabezado
   TITULO:    "Concurso de Murales",
