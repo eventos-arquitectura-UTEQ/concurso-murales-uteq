@@ -187,8 +187,18 @@
       if (obs === null) return;
       cambios.observaciones = obs;
     }
-    const r = await db.from("equipos").update(cambios).eq("id", id);
+    const r = await db.from("equipos").update(cambios).eq("id", id).select();
     if (r.error) { aviso("#avisos", "error", esc(r.error.message)); return; }
+
+    // Sin error pero sin filas afectadas = las reglas de seguridad bloquearon el cambio.
+    // El caso típico es la excusación: nadie valida la propuesta que él mismo inscribió.
+    if (!r.data || r.data.length === 0) {
+      aviso("#avisos", "error",
+        "<strong>El cambio no se aplicó.</strong> El sistema impide validar una propuesta " +
+        "inscrita por tu propia cuenta. Debe revisarla otro integrante del Comité Organizador.");
+      return;
+    }
+
     await cargar();
     aviso("#avisos", "exito", "Propuesta marcada como <strong>" + esc(estado) + "</strong>.");
   }
