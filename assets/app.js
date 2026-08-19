@@ -206,7 +206,8 @@
     cont.innerHTML = `
       <div class="contenedor">
         <a class="marca" href="index.html">
-          <span class="sello">UTEQ</span>
+          <img class="sello" src="assets/logo-uteq.png"
+               alt="Universidad Técnica Estatal de Quevedo">
           <span><b>${esc(C.TITULO)}</b><span>Casa Abierta 2026 · FCI</span></span>
         </a>
         <nav class="menu">
